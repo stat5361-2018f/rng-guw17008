@@ -1,0 +1,172 @@
+---
+title: "Ex6.1"
+author: "Guanting Wei"
+date: "Oct.17.2018"
+output: pdf_document
+header-includes: 
+  \usepackage{algorithm}
+  \usepackage{algpseudocode}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1. Find function g
+We have
+$$g(x)\propto (2x^{\theta-1}+x^{\theta-\frac{1}{2}})e^{-x}$$
+So
+$$g(x)=C(2x^{\theta-1}+x^{\theta-\frac{1}{2}})e^{-x}$$
+Because g is a mixture of gamma distribution, let's consider gamma distribution. 
+$$f(x,\beta,\alpha)=\frac{\beta^\alpha}{\Gamma (\alpha)}x^{\alpha-1}e^{-\beta x}$$
+According the formation of function g, we let $\beta=1$, $\alpha=\theta\ \ and\ \ \theta+\frac{1}{2}$. The component distributions are as follow.
+$$f(x,1,\theta)=\frac{1}{\Gamma (\theta)}x^{\theta-1}e^{-x}$$
+$$f(x,1,\theta+\frac{1}{2})=\frac{1}{\Gamma (\theta+\frac{1}{2})}x^{\theta-\frac{1}{2}}e^{-x}$$
+Due to the Properties of density functions, we have 
+$$\int_{-\infty}^{\infty}f(x)\mathrm{d}x=1$$
+\[
+\begin{aligned}
+&\int_{-\infty}^{\infty}f(x,1,\theta)\mathrm{d}x=\int_{0}^{\infty}\frac{1}{\Gamma (\theta)}x^{\theta-1}e^{-x}\mathrm{d}x=1\\
+&\int_{-\infty}^{\infty}f(x,1,\theta+\frac{1}{2})\mathrm{d}x=\int_{0}^{\infty}\frac{1}{\Gamma (\theta+\frac{1}{2})}x^{\theta-\frac{1}{2}}e^{-x}\mathrm{d}x=1\\
+&\int_{0}^{\infty}x^{\theta-1}e^{-x}\mathrm{d}x=\Gamma (\theta)\\
+&\int_{0}^{\infty}x^{\theta-\frac{1}{2}}e^{-x}\mathrm{d}x=\Gamma (\theta+\frac{1}{2})
+\end{aligned}
+\]
+\[
+\begin{aligned}
+\int_{0}^{\infty}g(x)\mathrm{d}x&=C\int_{0}^{\infty}(2x^{\theta-1}+x^{\theta-\frac{1}{2}})e^{-x}\mathrm{d}x\\&=C[\int_{0}^{\infty}2x^{\theta-1}e^{-x}\mathrm{d}x+\int_{0}^{\infty}x^{\theta-\frac{1}{2}}e^{-x}\mathrm{d}x]\\&=C[2\Gamma (\theta)+\Gamma (\theta+\frac{1}{2})]=1\\
+&\Rightarrow C=\frac{1}{2\Gamma (\theta)+\Gamma (\theta+\frac{1}{2})}
+\end{aligned}
+\]
+So
+$$g(x)=\frac{2\Gamma (\theta)}{2\Gamma (\theta)+\Gamma(\theta+\frac{1}{2})}\frac{x^{\theta-1}e^{-x}}{\Gamma (\theta)}+\frac{\Gamma(\theta+\frac{1}{2})}{2\Gamma (\theta)+\Gamma(\theta+\frac{1}{2})}\frac{x^{\theta-\frac{1}{2}}e^{-x}}{\Gamma(\theta+\frac{1}{2})}$$
+Weights are $\frac{2\Gamma (\theta)}{2\Gamma (\theta)+\Gamma(\theta+\frac{1}{2})}$ for $f(x,1,\theta)$ and $\frac{\Gamma(\theta+\frac{1}{2})}{2\Gamma (\theta)+\Gamma(\theta+\frac{1}{2})}$ for $f(x,1,\theta+\frac{1}{2})$
+
+# 2. Sample
+## 2.1 Pseudo-code 
+
+\begin{algorithm}
+\begin{algorithmic}[1]
+\Procedure{}{}
+\State $P\sim U(0, 1)$
+\If{$P < \frac{2\Gamma(\theta)}{2\Gamma(\theta)+\Gamma(\theta+\frac{1}{2})}$}
+\State $X\sim (\theta, 1)$
+\Else
+\State $X\sim (\theta+\frac{1}{2}, 1)$
+\EndIf
+\State\Return $X$
+\EndProcedure
+\end{algorithmic}
+\caption{Sampling from $g(x)$}
+\end{algorithm}
+
+## 2.2 Code
+```{r}
+library(abind)
+g=function(x,theta){
+  (2*x^(theta-1)+x^(theta-0.5))*exp(-x)/(2*gamma(theta)+gamma(theta+0.5))
+}
+
+sample_g=function(n,alpha,beta,weight){
+  x_g=array(0,n)
+  p1=runif(n,0,1)
+  f1=rgamma(n,alpha[1],beta[1])
+  f2=rgamma(n,alpha[2],beta[2])
+  x_g=abind(f1[p1<weight],f2[p1>=weight])
+}
+n=10000
+theta=1
+alpha=c(theta,theta+0.5)
+beta=c(1,1)
+weight=2*gamma(theta)/(2*gamma(theta)+gamma(theta+0.5))
+x=sample_g(n,alpha,beta,weight)
+library(ggplot2)
+ggplot(data.frame(x=x),aes(x=x))+
+  xlab("x")+
+  ylab("density")+
+  ggtitle("Gamma mixture distribution")+
+  geom_histogram(aes(y=..density..),fill="gray", colour="black")+
+  geom_density(fill="green",colour="green" ,alpha=0.2)+
+  stat_function(fun=function(x) g(x,theta),color="red")+
+  annotate("text", x=9, y=0.6, label="Kernel",color="green")+
+  annotate("text", x=9, y=0.5, label="True",color="red")
+```
+
+# 3. Rejection Sampling
+$$f(x)\propto h(x)=\sqrt{x+4}x^{\theta-1}e^{-x}$$
+$$E=\int_{0}^{\infty}h(x)\mathrm{d}x=\int_{0}^{\infty}\sqrt{x+4}x^{\theta-1}e^{-x}\mathrm{d}x$$
+$$f(x)=\frac{h(x)}{E}$$
+$$f(x)\leq Mg(x)\\
+\Rightarrow M=max(\frac{f(x)}{g(x)})$$
+$$\frac{f(x)}{g(x)}=\frac{\sqrt{x+4}x^{\theta-1}e^{-x}}{CE(2x^{\theta-1}+x^{\theta-\frac{1}{2}})e^{-x}}=\frac{\sqrt{x+4}}{CE(2+\sqrt{x})}$$
+In order to calculate $max(\frac{f(x)}{g(x)})$, let $q(x)=\frac{f(x)}{g(x)}=\frac{\sqrt{x+4}}{CE(2+\sqrt{x})}$
+$$q'(x)=\frac{1}{CE}\frac{\frac{1}{2\sqrt{x+4}}(2+\sqrt x)-\frac{1}{2\sqrt x}\sqrt{x+4}}{(2+\sqrt x)^2}
+=\frac{1}{CE}\frac{2\sqrt x-4}{2\sqrt{x+4}\sqrt x(2+\sqrt x)^2}$$
+We can know that when $x<4$,$q'(x)<0$;when $x>4$,$q'(x)>0$. So max(q(x)) can be q(0) or q($\infty$). $q(0)=\frac{1}{CE}=q(\infty)$. $$M=max(\frac{f(x)}{g(x)})=\frac{1}{CE}$$
+
+$\\$
+
+## 3.1 Pseudo-code 
+
+
+\begin{algorithm}
+\begin{algorithmic}[1]
+\Procedure{}{}
+\State Sample $P\sim U(0, 1)$
+\If{$P\leq\frac{f(x)}{Mg(x)}=\frac{\sqrt{x+4}}{(2+\sqrt{x})}$}
+\State\Return X
+\Else
+\State go back to 2
+\EndIf
+\EndProcedure
+\end{algorithmic}
+\caption{Sampling from $f(x)$}
+\end{algorithm}
+
+## 3.2 Code
+
+```{r}
+sample_f=function(n,alpha,beta,weight){
+  x_f=rep(0,n)
+  count=1
+  while(count<=n){
+  x_g=sample_g(1,alpha,beta,weight)
+  p2=runif(1,0,1)
+  if(p2<=sqrt(x_g+4)/(2+sqrt(x_g))){
+    x_f[count]=x_g
+    count=count+1
+  }
+  }
+  x_f
+}
+
+h=function(x,theta){
+  sqrt(x+4)*x^(theta-1)*exp(-x)
+}
+
+f=function(x,theta){
+  h(x,theta)/integrate(function(x)h(x,theta),0,Inf)$value
+}
+
+n=10000
+theta=1
+alpha=c(theta,theta+0.5)
+beta=c(1,1)
+weight=2*gamma(theta)/(2*gamma(theta)+gamma(theta+0.5))
+x_f=sample_f(n,alpha,beta,weight)
+```
+
+
+```{r}
+ggplot(data.frame(x=x_f),aes(x=x))+
+  xlab("x")+
+  ylab("density")+
+  ggtitle("distribution of f(x)")+
+  geom_histogram(aes(y=..density..),fill="gray", colour="black")+
+  geom_density(fill="green",colour="green" ,alpha=0.2)+
+  stat_function(fun=function(x) g(x,theta),color="red")+
+  annotate("text", x=7.5, y=0.5, label="Kernel",color="green")+
+  annotate("text", x=7.5, y=0.4, label="True",color="red")
+```
+
+
